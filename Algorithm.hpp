@@ -63,26 +63,37 @@ public:
         }
         m_meanECTSPerSubject = sum / m_subjects.size();
 
-        m_randomEng =  std::default_random_engine{};
+        m_randomEng =  std::mt19937(std::random_device{});
     };
     
+    void setParameters(bool enableElitism = true, int elitismPercent = 10, int crossoverPercent = 50);
     void run();
 private:
     void generateInitialPopulation();
     void generateNewGeneration();
+
     std::vector<std::deque<bool>> generateChromosome() const;
-    Individual generateOffspring(const Individual& parentOne, const Individual& parentTwo);
     int calculateFitness(const std::vector<std::deque<bool>>& chromosome) const;
+    bool checkPermutation(const std::vector<std::deque<bool>>& chromosome) const;
+
+    Individual generateOffspring(const Individual& parentOne, const Individual& parentTwo) const;
+    std::deque<bool> mutate() const;
+
+    void printIndividual(const std::vector<std::deque<bool>>& chromosome) const;
 
     int m_semesters;
     int m_minECTS;
     int m_studyDays;
-    std::vector<Subject> m_subjects; // think about removing free ones from here? std::difference?
+    std::vector<Subject> m_subjects;
 
     int m_meanECTSPerSubject;
     std::vector<Subject> m_freeSubjects; // subjects which do not have any dependees
     std::vector<std::pair<std::vector<int>, int>> m_dependencies; // second depends on all from first
     std::vector<Individual> m_population;
-    std::unordered_map<int, Subject> m_IDtoSubject;
-    std::default_random_engine m_randomEng;
+    std::unordered_map<int, Subject> m_IDtoSubject; // this could be the only map, eliminating the need for subjects, remove later
+    std::mt19937 m_randomEng;
+
+    bool m_elitismEnabled;
+    int m_elitismPercent;
+    int m_crossoverPercent;
 };

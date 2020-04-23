@@ -1,17 +1,25 @@
 #include <Algorithm.hpp>
 #include <algorithm>
+#include <iostream>
 
+
+void Algorithm::setParameters(bool enableElitism, int elitismPercent, int crossoverPercent)
+{
+    m_elitismEnabled = enableElitism;
+    m_elitismPercent = elitismPercent;
+    m_crossoverPercent = crossoverPercent;
+}
 
 void Algorithm::run()
 {
     int generation = 0;
     bool found = false;
 
-   generatePopulation();
+   generateInitialPopulation();
 
     while (!found)
     {
-        std::sort(m_population.begin(), m_population.end(), IndividualPred); // sort with lowest fitness first
+        std::sort(m_population.begin(), m_population.end(), IndividualPred()); // sort with lowest fitness first
 
         if (m_population.at(0).fitness <= 0)
         {
@@ -21,14 +29,38 @@ void Algorithm::run()
         // if we reached many iterations and do not make progress?
 
         generateNewGeneration();
+        std::cout << "Generation: " << generation << std::endl;
+        std::cout << "Subject choice: " << printIndividual(m_population.at(0).chromosome) << std::endl;
+        std::cout << "Fitness choice: " << m_population.at(0).fitness << std::endl;
 
         ++generation;
     }
+    std::cout << "Final Generation" << std::endl;
+    std::cout << "Generation: " << generation << std::endl;
+    std::cout << "Subject choice: " << printIndividual(m_population.at(0).chromosome) << std::endl;
+    std::cout << "Fitness choice: " << m_population.at(0).fitness << std::endl;
+    // found the optimal solution
+    // print it out?
 }
 
-void Algorithm::generatePopulation()
+void Algorithm::printIndividual(const std::vector<std::deque<bool>>& chromosome) const
 {
-    for (int i = 0; i < m_population; ++i)
+    for (int i = 0; i < chromosome.size(); ++i)
+    {
+        std::cout << "S: " << i << " | ";
+        for (int j = 0; j < chromosome.at(i).size(); ++j)
+        {
+            bool v = chromosome.at(i).at(j);
+            if (v)
+                std::cout << v << " ";
+        }
+        std::cout << "\t";
+    }
+}
+
+void Algorithm::generateInitialPopulation()
+{
+    for (int i = 0; i < m_population.size(); ++i)
     {
         auto chromosome = generateChromosome();
         int fitness = calculateFitness(chromosome);
@@ -43,11 +75,12 @@ std::vector<std::deque<bool>> Algorithm::generateChromosome() const
     int requiredSubjectsPerSem = std::ceil(m_minECTS/m_meanECTSPerSubject);
     std::vector<std::deque<bool>> chromosome;
     std::deque<int> subjectsIDs;
-    subjectsIDs.reserve(m_subjects.size());
+    subjectsIDs.resize(m_subjects.size());
     bool ready = false;
     
     while (!ready)
     {
+        chromosome.clear();
         ready = true;
         for (const auto& sub : m_subjects) // can I simplify it further?
             subjectsIDs.push_back(sub.ID);
@@ -66,43 +99,121 @@ std::vector<std::deque<bool>> Algorithm::generateChromosome() const
             }
             chromosome.push_back(chosen); // should trigger copy ellision
         }
-
         // validate if all semesters account for a valid generation
-        std::deque<bool> unlocked(m_subjects.size());
-        for (const auto& sub : m_freeSubjects)
-            unlocked.at(sub.ID) = true;
-
-        for (const auto& sem : chromosome)
-        {
-            for (const auto& sub : sem)
-            {
-                // check if all chosen subjects are already unlocked
-                if (sub)
-                {
-                    // similar algo to Tree
-
-                    // if failure
-                    ready = false;
-                    break;
-                }
-            }
-        }
+        ready = checkPermutation(chromosome);
     }
 
     return chromosome;
 }
 
-void Algorithm::generateNewGeneration()
+bool Algorithm::checkPermutation(const std::vector<std::deque<bool>>& chromosome) const
 {
+    std::deque<bool> unlocked(m_subjects.size());
+    for (const auto& sub : m_freeSubjects)
+        unlocked.at(sub.ID) = true;
 
-    // decide how to percform mutations and elitism etc
+    for (const auto& sem : chromosome)
+    {
+        for (int i = 0; i < sem.size(); ++i)
+        {
+            if (sem.at(i))
+            {
+                // check if it has dependencies, check if they are unlocked already
+                auto it = std::find_if(m_dependencies.begin(), m_dependencies.end(), [&](const auto& dep){
+                    return dep.second == i;
+                });
+                if (it != m_dependencies.end())
+                {
+                    for (const auto& dep : (*it).first)
+                    {
+                        // this subject has unmet dependencies, discard it
+                        if (!unlocked.at(dep))
+                            return false;
+                    }
+                }
+                // if there is already a subject with this ID
+                if (unlocked.at(i))
+                    return false;
+                // if ok mark it as unlocked
+                unlocked.at(i) = true;
+            }
+        }
+    }
+    return true;
 }
 
-Individual Algorithm::generateOffspring(const Individual& parentOne, const Individual& parentTwo)
+void Algorithm::generateNewGeneration()
 {
-    // decide on mating techniques, how to cross genes? whole choices of subjects per one semester? split semesters?
-    // for now simple mating, swap semesters etc
+    std::vector<Individual> newGeneration;
+    int threshold = 0;
+    int elitismNumber = ((m_elitismPercent * m_population.size())/ 100);
+    int remainderNumber = m_population.size() - elitismNumber;
 
+    if (m_elitismEnabled)
+    {
+        for (int i = 0; i < elitismNumber; ++i)
+            newGeneration.push_back(m_population.at(i));
+    }
+
+    threshold = ((m_crossoverPercent * m_population.size())/ 100);
+    std::uniform_int_distribution<> distr(0, threshold); //tweak the distribution?
+    for (int i = 0; i < remainderNumber; ++i)
+    {
+        int randOne = distr(m_randomEng);
+        int randTwo = distr(m_randomEng);
+        Individual offspring = generateOffspring(m_population.at(randOne), m_population.at(randTwo));
+        newGeneration.push_back(offspring);
+    }
+    
+    m_population = newGeneration;
+}
+
+// decide on mating techniques, how to cross genes? whole choices of subjects per one semester? split semesters?
+// for now simple mating, swap semesters etc
+// allow for more advanced mating?
+Individual Algorithm::generateOffspring(const Individual& parentOne, const Individual& parentTwo) const
+{
+    std::uniform_int_distribution<> distr(0, 100); //tweak the distribution?
+    std::vector<std::deque<bool>> chromosome;
+    bool ready = false;
+
+    while (!ready)
+    {
+        for (int i = 0; i < parentOne.chromosome.size(); ++i)
+        {
+            int p = distr(m_randomEng);
+            if (p < 45)
+                chromosome.push_back(parentOne.chromosome.at(i));
+            else if (p < 90)
+                chromosome.push_back(parentTwo.chromosome.at(i));
+            else
+                chromosome.push_back(mutate());
+        }
+
+        ready = checkPermutation(chromosome);
+    }
+    return { chromosome, calculateFitness(chromosome)};
+}
+
+std::deque<bool> Algorithm::mutate() const
+{
+    int requiredSubjectsPerSem = std::ceil(m_minECTS/m_meanECTSPerSubject);
+    std::deque<int> subjectsIDs;
+    subjectsIDs.resize(m_subjects.size());
+    for (const auto& sub : m_subjects)
+        subjectsIDs.push_back(sub.ID);
+
+    std::shuffle(subjectsIDs.begin(), subjectsIDs.end(), m_randomEng);
+    
+    std::deque<bool> chosen(m_subjects.size());
+    for (int j = 0; j < requiredSubjectsPerSem; ++j)// may happen that because of ceil it will assert, as deque will be empty
+    {
+        int id = subjectsIDs.back();
+        subjectsIDs.pop_back();
+        chosen.at(id) = true;
+    }
+
+    return chosen;
 }
 
 int Algorithm::calculateFitness(const std::vector<std::deque<bool>>& chromosome) const
@@ -120,5 +231,5 @@ int Algorithm::calculateFitness(const std::vector<std::deque<bool>>& chromosome)
         }
         total += semVal;
     }
-    return semVal - ideal;
+    return total - ideal;
 }
