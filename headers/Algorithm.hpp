@@ -5,6 +5,7 @@
 #include <deque>
 #include <unordered_map>
 #include <random>
+#include <algorithm>
 
 struct Subject
 {
@@ -29,8 +30,8 @@ struct IndividualPred
 class Algorithm
 {
 public:
-    Algorithm(int semesters, int minECTS, int studyDays, std::vector<Subject> subjects, std::vector<std::pair<int, int>> dependencies)
-        :  m_semesters(semesters), m_minECTS(minECTS), m_studyDays(studyDays), m_subjects(std::move(subjects))
+    Algorithm(int populationSize, int semesters, int minECTS, int studyDays, std::vector<Subject> subjects, std::vector<std::pair<int, int>> dependencies)
+        :  m_populationSize(populationSize), m_semesters(semesters), m_minECTS(minECTS), m_studyDays(studyDays), m_subjects(std::move(subjects))
     {
         // prepare dependencies
         for (const auto& [required, unlocked] : dependencies)
@@ -63,7 +64,8 @@ public:
         }
         m_meanECTSPerSubject = sum / m_subjects.size();
 
-        m_randomEng =  std::mt19937(std::random_device{});
+        std::random_device rd;
+        m_randomEng = std::mt19937{rd()};
     };
     
     void setParameters(bool enableElitism = true, int elitismPercent = 10, int crossoverPercent = 50);
@@ -81,6 +83,7 @@ private:
 
     void printIndividual(const std::vector<std::deque<bool>>& chromosome) const;
 
+    int m_populationSize;
     int m_semesters;
     int m_minECTS;
     int m_studyDays;
@@ -91,7 +94,7 @@ private:
     std::vector<std::pair<std::vector<int>, int>> m_dependencies; // second depends on all from first
     std::vector<Individual> m_population;
     std::unordered_map<int, Subject> m_IDtoSubject; // this could be the only map, eliminating the need for subjects, remove later
-    std::mt19937 m_randomEng;
+    mutable std::mt19937 m_randomEng;
 
     bool m_elitismEnabled;
     int m_elitismPercent;

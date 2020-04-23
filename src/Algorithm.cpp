@@ -1,5 +1,4 @@
 #include <Algorithm.hpp>
-#include <algorithm>
 #include <iostream>
 
 
@@ -30,14 +29,16 @@ void Algorithm::run()
 
         generateNewGeneration();
         std::cout << "Generation: " << generation << std::endl;
-        std::cout << "Subject choice: " << printIndividual(m_population.at(0).chromosome) << std::endl;
+        std::cout << "Subject choice: ";
+        printIndividual(m_population.at(0).chromosome);
         std::cout << "Fitness choice: " << m_population.at(0).fitness << std::endl;
 
         ++generation;
     }
     std::cout << "Final Generation" << std::endl;
     std::cout << "Generation: " << generation << std::endl;
-    std::cout << "Subject choice: " << printIndividual(m_population.at(0).chromosome) << std::endl;
+    std::cout << "Subject choice: ";
+    printIndividual(m_population.at(0).chromosome);
     std::cout << "Fitness choice: " << m_population.at(0).fitness << std::endl;
     // found the optimal solution
     // print it out?
@@ -45,22 +46,22 @@ void Algorithm::run()
 
 void Algorithm::printIndividual(const std::vector<std::deque<bool>>& chromosome) const
 {
-    for (int i = 0; i < chromosome.size(); ++i)
+    for (size_t i = 0; i < chromosome.size(); ++i)
     {
         std::cout << "S: " << i << " | ";
-        for (int j = 0; j < chromosome.at(i).size(); ++j)
+        for (size_t j = 1; j < chromosome.at(i).size(); ++j)
         {
             bool v = chromosome.at(i).at(j);
-            if (v)
-                std::cout << v << " ";
+            std::cout << v << " ";
         }
         std::cout << "\t";
     }
+    std::cout << std::endl;
 }
 
 void Algorithm::generateInitialPopulation()
 {
-    for (int i = 0; i < m_population.size(); ++i)
+    for (int i = 0; i < m_populationSize; ++i)
     {
         auto chromosome = generateChromosome();
         int fitness = calculateFitness(chromosome);
@@ -90,7 +91,7 @@ std::vector<std::deque<bool>> Algorithm::generateChromosome() const
         // choose  subjects randomly for each semester, in number equal to requiredECTS/meanECTS
         for (int i = 0; i < m_semesters; ++i)
         {
-            std::deque<bool> chosen(m_subjects.size());
+            std::deque<bool> chosen(m_subjects.size() + 1); // +1 for indices from '1'
             for (int j = 0; j < requiredSubjectsPerSem; ++j)// may happen that because of ceil it will assert, as deque will be empty
             {
                 int id = subjectsIDs.back();
@@ -108,19 +109,19 @@ std::vector<std::deque<bool>> Algorithm::generateChromosome() const
 
 bool Algorithm::checkPermutation(const std::vector<std::deque<bool>>& chromosome) const
 {
-    std::deque<bool> unlocked(m_subjects.size());
+    std::deque<bool> unlocked(m_subjects.size() + 1);
     for (const auto& sub : m_freeSubjects)
         unlocked.at(sub.ID) = true;
 
     for (const auto& sem : chromosome)
     {
-        for (int i = 0; i < sem.size(); ++i)
+        for (size_t i = 1; i < sem.size(); ++i)
         {
             if (sem.at(i))
             {
                 // check if it has dependencies, check if they are unlocked already
                 auto it = std::find_if(m_dependencies.begin(), m_dependencies.end(), [&](const auto& dep){
-                    return dep.second == i;
+                    return static_cast<size_t>(dep.second) == i;
                 });
                 if (it != m_dependencies.end())
                 {
@@ -146,8 +147,8 @@ void Algorithm::generateNewGeneration()
 {
     std::vector<Individual> newGeneration;
     int threshold = 0;
-    int elitismNumber = ((m_elitismPercent * m_population.size())/ 100);
-    int remainderNumber = m_population.size() - elitismNumber;
+    int elitismNumber = ((m_elitismPercent * m_populationSize)/ 100);
+    int remainderNumber = m_populationSize - elitismNumber;
 
     if (m_elitismEnabled)
     {
@@ -155,7 +156,7 @@ void Algorithm::generateNewGeneration()
             newGeneration.push_back(m_population.at(i));
     }
 
-    threshold = ((m_crossoverPercent * m_population.size())/ 100);
+    threshold = ((m_crossoverPercent * m_populationSize)/ 100);
     std::uniform_int_distribution<> distr(0, threshold); //tweak the distribution?
     for (int i = 0; i < remainderNumber; ++i)
     {
@@ -173,13 +174,13 @@ void Algorithm::generateNewGeneration()
 // allow for more advanced mating?
 Individual Algorithm::generateOffspring(const Individual& parentOne, const Individual& parentTwo) const
 {
-    std::uniform_int_distribution<> distr(0, 100); //tweak the distribution?
+    std::uniform_int_distribution<> distr(0, 100 - 1); //tweak the distribution?
     std::vector<std::deque<bool>> chromosome;
     bool ready = false;
 
     while (!ready)
     {
-        for (int i = 0; i < parentOne.chromosome.size(); ++i)
+        for (size_t i = 0; i < parentOne.chromosome.size(); ++i)
         {
             int p = distr(m_randomEng);
             if (p < 45)
@@ -205,8 +206,8 @@ std::deque<bool> Algorithm::mutate() const
 
     std::shuffle(subjectsIDs.begin(), subjectsIDs.end(), m_randomEng);
     
-    std::deque<bool> chosen(m_subjects.size());
-    for (int j = 0; j < requiredSubjectsPerSem; ++j)// may happen that because of ceil it will assert, as deque will be empty
+    std::deque<bool> chosen(m_subjects.size() + 1);
+    for (int j = 1; j < requiredSubjectsPerSem; ++j)// may happen that because of ceil it will assert, as deque will be empty
     {
         int id = subjectsIDs.back();
         subjectsIDs.pop_back();
@@ -224,7 +225,7 @@ int Algorithm::calculateFitness(const std::vector<std::deque<bool>>& chromosome)
     for (const auto& semester : chromosome)
     {
         int semVal = 0;
-        for (int i = 0; i < semester.size(); ++i)
+        for (size_t i = 1; i < semester.size(); ++i)
         {
             if (semester.at(i))
                 semVal += m_IDtoSubject.at(i).studyDays;
