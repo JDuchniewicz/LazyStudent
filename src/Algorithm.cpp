@@ -20,7 +20,7 @@ void Algorithm::run()
     {
         std::sort(m_population.begin(), m_population.end(), IndividualPred()); // sort with lowest fitness first
 
-        if (m_population.at(0).fitness <= 0)
+        if (m_population.at(0).fitness <= -10) // empiric value
         {
             found = true;
             break;
@@ -73,14 +73,20 @@ void Algorithm::generateInitialPopulation()
 // simpler version, generate combinations and prune these that do not satisfy conditions
 std::vector<std::deque<bool>> Algorithm::generateChromosome() const
 {
-    int requiredSubjectsPerSem = std::ceil(m_minECTS/m_meanECTSPerSubject);
+    int requiredSubjectsPerSem = std::ceil(static_cast<float>(m_minECTS)/static_cast<float>(m_meanECTSPerSubject));
     std::vector<std::deque<bool>> chromosome;
     std::deque<int> subjectsIDs;
-    subjectsIDs.resize(m_subjects.size());
     bool ready = false;
+    int tries = 0;
     
     while (!ready)
     {
+        if (tries >= 10'000)
+        {
+            std::cout << "Cannot generate, not enough viable combinations for " << tries << " tries." << std::endl;
+            exit(-1);
+        }
+        subjectsIDs.clear();
         chromosome.clear();
         ready = true;
         for (const auto& sub : m_subjects) // can I simplify it further?
@@ -92,8 +98,10 @@ std::vector<std::deque<bool>> Algorithm::generateChromosome() const
         for (int i = 0; i < m_semesters; ++i)
         {
             std::deque<bool> chosen(m_subjects.size() + 1); // +1 for indices from '1'
-            for (int j = 0; j < requiredSubjectsPerSem; ++j)// may happen that because of ceil it will assert, as deque will be empty
+            for (int j = 0; j < requiredSubjectsPerSem; ++j)
             {
+                if (subjectsIDs.empty())// may happen that because of ceil it will assert, as deque will be empty
+                    break;
                 int id = subjectsIDs.back();
                 subjectsIDs.pop_back();
                 chosen.at(id) = true;
@@ -102,24 +110,25 @@ std::vector<std::deque<bool>> Algorithm::generateChromosome() const
         }
         // validate if all semesters account for a valid generation
         ready = checkPermutation(chromosome);
+        ++tries;
     }
 
     return chromosome;
 }
 
+// checks both subject dependencies and their real ECTS requirements (generator just tentatively proposes ects numbers according to mean)
 bool Algorithm::checkPermutation(const std::vector<std::deque<bool>>& chromosome) const
 {
-    std::deque<bool> unlocked(m_subjects.size() + 1);
-    for (const auto& sub : m_freeSubjects)
-        unlocked.at(sub.ID) = true;
-
+    std::deque<bool> chosen(m_subjects.size() + 1);
     for (const auto& sem : chromosome)
     {
+        int semECTS = 0;
+        int semStudyHours = 0;
         for (size_t i = 1; i < sem.size(); ++i)
         {
             if (sem.at(i))
             {
-                // check if it has dependencies, check if they are unlocked already
+                // check if it has dependencies, check if they are unlocked or already chosen
                 auto it = std::find_if(m_dependencies.begin(), m_dependencies.end(), [&](const auto& dep){
                     return static_cast<size_t>(dep.second) == i;
                 });
@@ -128,17 +137,24 @@ bool Algorithm::checkPermutation(const std::vector<std::deque<bool>>& chromosome
                     for (const auto& dep : (*it).first)
                     {
                         // this subject has unmet dependencies, discard it
-                        if (!unlocked.at(dep))
+                        if (!chosen.at(dep)) // if not already chosen in previous iterations, dependency not met
                             return false;
                     }
                 }
                 // if there is already a subject with this ID
-                if (unlocked.at(i))
+                if (chosen.at(i))
                     return false;
-                // if ok mark it as unlocked
-                unlocked.at(i) = true;
+
+                chosen.at(i) = true;
+                // add this subjects constraints
+                const auto& sub = m_IDtoSubject.at(i);
+                semECTS += sub.ECTS;
+                semStudyHours += sub.studyDays;
             }
         }
+        // check if ECTS requirements met for this semester
+        if (semECTS < m_minECTS || semStudyHours > m_studyDays)
+            return false;
     }
     return true;
 }
