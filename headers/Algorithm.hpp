@@ -24,7 +24,7 @@ struct Individual
 
 struct IndividualPred
 {
-    inline bool operator()(const Individual& lhs, const Individual& rhs) { return lhs.fitness > rhs.fitness; }
+    inline bool operator()(const Individual& lhs, const Individual& rhs) { return lhs.fitness < rhs.fitness; }
 };
 
 class Algorithm
@@ -79,9 +79,11 @@ private:
     bool checkPermutation(const std::vector<std::deque<bool>>& chromosome) const;
 
     Individual generateOffspring(const Individual& parentOne, const Individual& parentTwo) const;
-    std::deque<bool> mutate() const;
+    std::deque<bool> mutate(const std::deque<bool>& gene) const;
+    std::deque<bool> cross(const std::deque<bool>& geneOne, const std::deque<bool>& geneTwo) const;
 
     void printIndividual(const std::vector<std::deque<bool>>& chromosome) const;
+    bool checkConvergence(int currentFitness);
 
     int m_populationSize;
     int m_semesters;
@@ -99,4 +101,6 @@ private:
     bool m_elitismEnabled;
     int m_elitismPercent;
     int m_crossoverPercent;
+
+    std::vector<int> m_lastTenScores;
 };

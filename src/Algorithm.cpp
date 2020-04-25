@@ -13,6 +13,8 @@ void Algorithm::run()
 {
     int generation = 0;
     bool found = false;
+    int requiredSubjectsPerSem = std::ceil(static_cast<float>(m_minECTS)/static_cast<float>(m_meanECTSPerSubject));
+    std::cout << "Tentative subjects per sem: " << requiredSubjectsPerSem << " m_meanECTS: " << m_meanECTSPerSubject << std::endl;
 
    generateInitialPopulation();
 
@@ -20,7 +22,7 @@ void Algorithm::run()
     {
         std::sort(m_population.begin(), m_population.end(), IndividualPred()); // sort with lowest fitness first
 
-        if (m_population.at(0).fitness <= -10) // empiric value
+        if (m_population.at(0).fitness <= -20 || checkConvergence(m_population.at(0).fitness)) // empiric value
         {
             found = true;
             break;
@@ -46,6 +48,7 @@ void Algorithm::run()
 
 void Algorithm::printIndividual(const std::vector<std::deque<bool>>& chromosome) const
 {
+    std::cout << std::endl;
     for (size_t i = 0; i < chromosome.size(); ++i)
     {
         std::cout << "S: " << i << " | ";
@@ -54,9 +57,29 @@ void Algorithm::printIndividual(const std::vector<std::deque<bool>>& chromosome)
             bool v = chromosome.at(i).at(j);
             std::cout << v << " ";
         }
-        std::cout << "\t";
+        std::cout << std::endl;
     }
     std::cout << std::endl;
+}
+
+bool Algorithm::checkConvergence(int currentFitness)
+{
+    if (m_lastTenScores.size() < 10)
+    {
+        m_lastTenScores.push_back(currentFitness);
+        return false;
+    }
+    std::rotate(m_lastTenScores.begin(), m_lastTenScores.begin() + 1, m_lastTenScores.end());
+    m_lastTenScores.at(9) = currentFitness;
+    if (m_lastTenScores.at(0) == m_lastTenScores.at(9))
+    {
+        std::cout << "################################################" << std::endl;
+        std::cout << "Converged - no change after 10 iterations." << std::endl;
+        std::cout << "################################################" << std::endl;
+        return true;
+    }
+
+    return false;
 }
 
 void Algorithm::generateInitialPopulation()
@@ -173,7 +196,7 @@ void Algorithm::generateNewGeneration()
     }
 
     threshold = ((m_crossoverPercent * m_populationSize)/ 100);
-    std::uniform_int_distribution<> distr(0, threshold); //tweak the distribution?
+    std::uniform_int_distribution<> distr(0, threshold - 1); //tweak the distribution?
     for (int i = 0; i < remainderNumber; ++i)
     {
         int randOne = distr(m_randomEng);
@@ -185,52 +208,78 @@ void Algorithm::generateNewGeneration()
     m_population = newGeneration;
 }
 
-// decide on mating techniques, how to cross genes? whole choices of subjects per one semester? split semesters?
-// for now simple mating, swap semesters etc
-// allow for more advanced mating?
+// add function to stop when oscillations converged
 Individual Algorithm::generateOffspring(const Individual& parentOne, const Individual& parentTwo) const
 {
     std::uniform_int_distribution<> distr(0, 100 - 1); //tweak the distribution?
     std::vector<std::deque<bool>> chromosome;
     bool ready = false;
+    int iterations = 0;
 
     while (!ready)
     {
+        chromosome.clear();
+        if (iterations > 10'000)
+        {
+            std::cout << "Could not generate offspring in: " << iterations << " iterations.";
+            exit(-1);
+        }
         for (size_t i = 0; i < parentOne.chromosome.size(); ++i)
         {
             int p = distr(m_randomEng);
-            if (p < 45)
-                chromosome.push_back(parentOne.chromosome.at(i));
-            else if (p < 90)
-                chromosome.push_back(parentTwo.chromosome.at(i));
+            if (p < 90)
+                chromosome.push_back(cross(parentOne.chromosome.at(i), parentTwo.chromosome.at(i)));
+            else if (p < 95)
+                chromosome.push_back(mutate(parentOne.chromosome.at(i)));
             else
-                chromosome.push_back(mutate());
+                chromosome.push_back(mutate(parentTwo.chromosome.at(i)));
         }
 
+        //ready = true;
+       // std::cout << "Iteration: " << iterations << std::endl;
+       // printIndividual(chromosome);
         ready = checkPermutation(chromosome);
+        ++iterations;
     }
     return { chromosome, calculateFitness(chromosome)};
 }
 
-std::deque<bool> Algorithm::mutate() const
+// flip just one subject choice in mutation, less invasive
+std::deque<bool> Algorithm::mutate(const std::deque<bool>& gene) const
 {
-    int requiredSubjectsPerSem = std::ceil(m_minECTS/m_meanECTSPerSubject);
-    std::deque<int> subjectsIDs;
-    subjectsIDs.resize(m_subjects.size());
-    for (const auto& sub : m_subjects)
-        subjectsIDs.push_back(sub.ID);
+    std::uniform_int_distribution<> distr(0, gene.size() - 1); //tweak the distribution?
+    std::deque<bool> mutated = gene;
+    int p = distr(m_randomEng);
+    mutated.at(p) = !gene.at(p);
+    return mutated;
+}
 
-    std::shuffle(subjectsIDs.begin(), subjectsIDs.end(), m_randomEng);
-    
-    std::deque<bool> chosen(m_subjects.size() + 1);
-    for (int j = 1; j < requiredSubjectsPerSem; ++j)// may happen that because of ceil it will assert, as deque will be empty
+std::deque<bool> Algorithm::cross(const std::deque<bool>& geneOne, const std::deque<bool>& geneTwo) const
+{
+    std::uniform_int_distribution<> distr(0, geneOne.size() - 1); //tweak the distribution?
+    std::deque<bool> crossed;
+    int p = distr(m_randomEng);
+    bool chosenOne = false;
+    if (p > static_cast<int>((geneOne.size() / 2)))
     {
-        int id = subjectsIDs.back();
-        subjectsIDs.pop_back();
-        chosen.at(id) = true;
+        crossed = geneOne;
+        chosenOne = true;
+    }
+    else
+        crossed = geneTwo;
+
+    p = distr(m_randomEng) / 4; // check how many values have to be exchanged?
+    int randIdx = 0;
+    for (int i = 0; i < p; ++i)
+    {
+        randIdx = distr(m_randomEng);
+        if (chosenOne)
+            crossed.at(randIdx) = geneTwo.at(randIdx);
+        else
+            crossed.at(randIdx) = geneOne.at(randIdx);
     }
 
-    return chosen;
+    return crossed;
 }
 
 int Algorithm::calculateFitness(const std::vector<std::deque<bool>>& chromosome) const
