@@ -27,6 +27,7 @@ int main(int argc, char* argv[])
     int i = 1;
     std::string line;
 
+    subjects.push_back({ -1, -1 }); // for the 0'th element
     // read subjects
     while (std::getline(file, line))
     {
@@ -37,7 +38,7 @@ int main(int argc, char* argv[])
         int ects = 0;
         str >> days;
         str >> ects;
-        subjects.push_back({i, ects, days});
+        subjects.push_back({ ects, days });
         //std::cout << "Read " << i << " " << ects << " " << days << std::endl;
         ++i;
     }

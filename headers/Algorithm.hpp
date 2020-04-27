@@ -11,7 +11,6 @@
 
 struct Subject
 {
-    int ID = 0;
     int ECTS = 0;
     int studyDays = 0;
 };
@@ -48,19 +47,6 @@ public:
                 m_dependencies.push_back({ { required }, unlocked });
         }
 
-// In this algorithm free subject may be useless
-//TODO
-        // populate free subjects list only with elements that are not present as dependers
-        std::copy_if(m_subjects.begin(), m_subjects.end(), std::back_inserter(m_freeSubjects), [&](auto subject){ //clarify it with gcc 10
-            return (std::find_if(m_dependencies.begin(), m_dependencies.end(), [&](const auto& depPair){
-                return depPair.second == subject.ID;
-            }) == m_dependencies.end());
-        });
-
-        // TODO: think if this is correct, duplicate ID
-        for (const auto& sub : m_subjects)
-            m_IDtoSubject.emplace(sub.ID, sub);
-
         std::random_device rd;
         m_randomEng = std::mt19937{rd()};
     };
@@ -89,10 +75,8 @@ private:
     int m_studyDays;
     std::vector<Subject> m_subjects;
 
-    std::vector<Subject> m_freeSubjects; // subjects which do not have any dependees
     std::vector<std::pair<std::vector<int>, int>> m_dependencies; // second depends on all from first
     std::vector<Individual> m_population;
-    std::unordered_map<int, Subject> m_IDtoSubject; // this could be the only map, eliminating the need for subjects, remove later
     mutable std::mt19937 m_randomEng;
 
     bool m_elitismEnabled;

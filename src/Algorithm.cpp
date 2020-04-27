@@ -134,17 +134,17 @@ std::vector<std::deque<bool>> Algorithm::generateChromosome() const
             exit(-1);
         }
         subjectsIDs.clear();
+        subjectsIDs.resize(m_subjects.size() - 1);
         chromosome.clear();
         ready = true;
-        for (const auto& sub : m_subjects) // can I simplify it further?
-            subjectsIDs.push_back(sub.ID);
 
+        std::iota(subjectsIDs.begin(), subjectsIDs.end(), 1);
         // this should be shrinking container, shuffled and allowing for pop()
         std::shuffle(subjectsIDs.begin(), subjectsIDs.end(), m_randomEng);
 
         for (int i = 0; i < m_semesters; ++i)
         {
-            std::deque<bool> chosen(m_subjects.size() + 1); // +1 for indices from '1'
+            std::deque<bool> chosen(m_subjects.size());
             int semECTS = 0;
             while (semECTS < m_minECTS)
             {
@@ -156,7 +156,7 @@ std::vector<std::deque<bool>> Algorithm::generateChromosome() const
                 chosen.at(id) = true;
 
                 // add this subjects constraints
-                const auto& sub = m_IDtoSubject.at(id);
+                const auto& sub = m_subjects.at(id);
                 semECTS += sub.ECTS;
             }
             chromosome.push_back(chosen); // should trigger copy ellision
@@ -171,7 +171,7 @@ std::vector<std::deque<bool>> Algorithm::generateChromosome() const
 
 bool Algorithm::checkPermutation(const std::vector<std::deque<bool>>& chromosome) const
 {
-    std::deque<bool> chosen(m_subjects.size() + 1);
+    std::deque<bool> chosen(m_subjects.size());
     for (const auto& sem : chromosome)
     {
         int semECTS = 0; // check the ECTS boundary
@@ -199,7 +199,7 @@ bool Algorithm::checkPermutation(const std::vector<std::deque<bool>>& chromosome
 
                 chosen.at(i) = true;
                 // add this subjects constraints
-                const auto& sub = m_IDtoSubject.at(i);
+                const auto& sub = m_subjects.at(i);
                 semECTS += sub.ECTS;
                 semStudyHours += sub.studyDays;
             }
@@ -321,7 +321,7 @@ int Algorithm::calculateFitness(const std::vector<std::deque<bool>>& chromosome)
         for (size_t i = 1; i < semester.size(); ++i)
         {
             if (semester.at(i))
-                semVal += m_IDtoSubject.at(i).studyDays;
+                semVal += m_subjects.at(i).studyDays;
         }
         total += semVal;
     }
