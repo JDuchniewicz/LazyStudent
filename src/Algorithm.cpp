@@ -1,20 +1,21 @@
 #include <Algorithm.hpp>
-#include <iostream>
+#include <chrono>
 
+#define DEBUG 1
 
-void Algorithm::setParameters(bool enableElitism, int elitismPercent, int crossoverPercent)
+void Algorithm::setParameters(bool enableElitism, int elitismPercent, int crossoverPercent, int convergenceN)
 {
     m_elitismEnabled = enableElitism;
     m_elitismPercent = elitismPercent;
     m_crossoverPercent = crossoverPercent;
+    m_convergenceN = convergenceN;
 }
 
 void Algorithm::run()
 {
+    auto start = std::chrono::high_resolution_clock::now();
     int generation = 0;
     bool found = false;
-    int requiredSubjectsPerSem = std::ceil(static_cast<float>(m_minECTS)/static_cast<float>(m_meanECTSPerSubject));
-    std::cout << "Tentative subjects per sem: " << requiredSubjectsPerSem << " m_meanECTS: " << m_meanECTSPerSubject << std::endl;
 
    generateInitialPopulation();
 
@@ -22,28 +23,35 @@ void Algorithm::run()
     {
         std::sort(m_population.begin(), m_population.end(), IndividualPred()); // sort with lowest fitness first
 
-        if (m_population.at(0).fitness <= -20 || checkConvergence(m_population.at(0).fitness)) // empiric value
+        if (checkConvergence(m_population.at(0).fitness))
         {
             found = true;
             break;
         }
-        // if we reached many iterations and do not make progress?
 
         generateNewGeneration();
+#if DEBUG
         std::cout << "Generation: " << generation << std::endl;
         std::cout << "Subject choice: ";
         printIndividual(m_population.at(0).chromosome);
         std::cout << "Fitness choice: " << m_population.at(0).fitness << std::endl;
+#endif
 
         ++generation;
     }
+#if DEBUG
     std::cout << "Final Generation" << std::endl;
     std::cout << "Generation: " << generation << std::endl;
     std::cout << "Subject choice: ";
     printIndividual(m_population.at(0).chromosome);
     std::cout << "Fitness choice: " << m_population.at(0).fitness << std::endl;
-    // found the optimal solution
-    // print it out?
+#endif
+    printResult(m_population.at(0).chromosome);
+
+    // print time
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    std::cout << "Algorithm ran " << duration << " miliseconds." << std::endl;
 }
 
 void Algorithm::printIndividual(const std::vector<std::deque<bool>>& chromosome) const
@@ -64,22 +72,39 @@ void Algorithm::printIndividual(const std::vector<std::deque<bool>>& chromosome)
 
 bool Algorithm::checkConvergence(int currentFitness)
 {
-    if (m_lastTenScores.size() < 10)
+    if (static_cast<int>(m_lastTenScores.size()) < m_convergenceN)
     {
         m_lastTenScores.push_back(currentFitness);
         return false;
     }
     std::rotate(m_lastTenScores.begin(), m_lastTenScores.begin() + 1, m_lastTenScores.end());
-    m_lastTenScores.at(9) = currentFitness;
-    if (m_lastTenScores.at(0) == m_lastTenScores.at(9))
+    m_lastTenScores.at(m_convergenceN - 1) = currentFitness;
+    if (*m_lastTenScores.begin() == *(m_lastTenScores.end() - 1))
     {
         std::cout << "################################################" << std::endl;
-        std::cout << "Converged - no change after 10 iterations." << std::endl;
+        std::cout << "Converged - no change after " << m_convergenceN << " iterations." << std::endl;
         std::cout << "################################################" << std::endl;
         return true;
     }
 
     return false;
+}
+
+void Algorithm::printResult(const std::vector<std::deque<bool>>& chromosome) const
+{
+    std::cout << std::endl;
+    for (size_t i = 0; i < chromosome.size(); ++i)
+    {
+        std::cout << "Semester: " << i << " | ";
+        for (size_t j = 1; j < chromosome.at(i).size(); ++j)
+        {
+            bool v = chromosome.at(i).at(j);
+            if (v)
+                std::cout << j << " ";
+        }
+        std::cout << std::endl;
+    }
+    std::cout << std::endl;
 }
 
 void Algorithm::generateInitialPopulation()
@@ -96,7 +121,6 @@ void Algorithm::generateInitialPopulation()
 // simpler version, generate combinations and prune these that do not satisfy conditions
 std::vector<std::deque<bool>> Algorithm::generateChromosome() const
 {
-    int requiredSubjectsPerSem = std::ceil(static_cast<float>(m_minECTS)/static_cast<float>(m_meanECTSPerSubject));
     std::vector<std::deque<bool>> chromosome;
     std::deque<int> subjectsIDs;
     bool ready = false;
@@ -114,20 +138,26 @@ std::vector<std::deque<bool>> Algorithm::generateChromosome() const
         ready = true;
         for (const auto& sub : m_subjects) // can I simplify it further?
             subjectsIDs.push_back(sub.ID);
+
         // this should be shrinking container, shuffled and allowing for pop()
         std::shuffle(subjectsIDs.begin(), subjectsIDs.end(), m_randomEng);
 
-        // choose  subjects randomly for each semester, in number equal to requiredECTS/meanECTS
         for (int i = 0; i < m_semesters; ++i)
         {
             std::deque<bool> chosen(m_subjects.size() + 1); // +1 for indices from '1'
-            for (int j = 0; j < requiredSubjectsPerSem; ++j)
+            int semECTS = 0;
+            while (semECTS < m_minECTS)
             {
                 if (subjectsIDs.empty())// may happen that because of ceil it will assert, as deque will be empty
                     break;
+
                 int id = subjectsIDs.back();
                 subjectsIDs.pop_back();
                 chosen.at(id) = true;
+
+                // add this subjects constraints
+                const auto& sub = m_IDtoSubject.at(id);
+                semECTS += sub.ECTS;
             }
             chromosome.push_back(chosen); // should trigger copy ellision
         }
@@ -139,13 +169,12 @@ std::vector<std::deque<bool>> Algorithm::generateChromosome() const
     return chromosome;
 }
 
-// checks both subject dependencies and their real ECTS requirements (generator just tentatively proposes ects numbers according to mean)
 bool Algorithm::checkPermutation(const std::vector<std::deque<bool>>& chromosome) const
 {
     std::deque<bool> chosen(m_subjects.size() + 1);
     for (const auto& sem : chromosome)
     {
-        int semECTS = 0;
+        int semECTS = 0; // check the ECTS boundary
         int semStudyHours = 0;
         for (size_t i = 1; i < sem.size(); ++i)
         {
@@ -208,7 +237,6 @@ void Algorithm::generateNewGeneration()
     m_population = newGeneration;
 }
 
-// add function to stop when oscillations converged
 Individual Algorithm::generateOffspring(const Individual& parentOne, const Individual& parentTwo) const
 {
     std::uniform_int_distribution<> distr(0, 100 - 1); //tweak the distribution?

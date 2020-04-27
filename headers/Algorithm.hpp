@@ -6,6 +6,8 @@
 #include <unordered_map>
 #include <random>
 #include <algorithm>
+#include <iostream>
+
 
 struct Subject
 {
@@ -56,19 +58,14 @@ public:
         });
 
         // TODO: think if this is correct, duplicate ID
-        int sum = 0;
         for (const auto& sub : m_subjects)
-        {
             m_IDtoSubject.emplace(sub.ID, sub);
-            sum += sub.ECTS;
-        }
-        m_meanECTSPerSubject = sum / m_subjects.size();
 
         std::random_device rd;
         m_randomEng = std::mt19937{rd()};
     };
     
-    void setParameters(bool enableElitism = true, int elitismPercent = 10, int crossoverPercent = 50);
+    void setParameters(bool enableElitism = true, int elitismPercent = 10, int crossoverPercent = 50, int convergenceN = 20);
     void run();
 private:
     void generateInitialPopulation();
@@ -83,6 +80,7 @@ private:
     std::deque<bool> cross(const std::deque<bool>& geneOne, const std::deque<bool>& geneTwo) const;
 
     void printIndividual(const std::vector<std::deque<bool>>& chromosome) const;
+    void printResult(const std::vector<std::deque<bool>>& chromosome) const;
     bool checkConvergence(int currentFitness);
 
     int m_populationSize;
@@ -91,7 +89,6 @@ private:
     int m_studyDays;
     std::vector<Subject> m_subjects;
 
-    int m_meanECTSPerSubject;
     std::vector<Subject> m_freeSubjects; // subjects which do not have any dependees
     std::vector<std::pair<std::vector<int>, int>> m_dependencies; // second depends on all from first
     std::vector<Individual> m_population;
@@ -103,4 +100,5 @@ private:
     int m_crossoverPercent;
 
     std::vector<int> m_lastTenScores;
+    int m_convergenceN;
 };
