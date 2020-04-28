@@ -1,7 +1,7 @@
 #include <Algorithm.hpp>
 #include <chrono>
 
-#define DEBUG 1
+#define DEBUG 0
 
 void Algorithm::setParameters(bool enableElitism, int elitismPercent, int crossoverPercent, int convergenceN)
 {
@@ -46,12 +46,16 @@ void Algorithm::run()
     printIndividual(m_population.at(0).chromosome);
     std::cout << "Fitness choice: " << m_population.at(0).fitness << std::endl;
 #endif
-    printResult(m_population.at(0).chromosome);
+    printResult(m_population.at(0));
 
     // print time
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
     std::cout << "Algorithm ran " << duration << " miliseconds." << std::endl;
+
+    std::ofstream outfile;
+    outfile.open("../results.txt", std::ios::app);
+    outfile << duration << "," << m_population.at(0).fitness << std::endl;
 }
 
 void Algorithm::printIndividual(const std::vector<std::deque<bool>>& chromosome) const
@@ -90,21 +94,22 @@ bool Algorithm::checkConvergence(int currentFitness)
     return false;
 }
 
-void Algorithm::printResult(const std::vector<std::deque<bool>>& chromosome) const
+void Algorithm::printResult(const Individual& individual) const
 {
     std::cout << std::endl;
-    for (size_t i = 0; i < chromosome.size(); ++i)
+    for (size_t i = 0; i < individual.chromosome.size(); ++i)
     {
         std::cout << "Semester: " << i << " | ";
-        for (size_t j = 1; j < chromosome.at(i).size(); ++j)
+        for (size_t j = 1; j < indivudal.chromosome.at(i).size(); ++j)
         {
-            bool v = chromosome.at(i).at(j);
+            bool v = individual.chromosome.at(i).at(j);
             if (v)
                 std::cout << j << " ";
         }
         std::cout << std::endl;
     }
     std::cout << std::endl;
+    std::cout << "Current Fitness: " << individual.fitness << std::endl;
 }
 
 void Algorithm::generateInitialPopulation()
@@ -128,7 +133,7 @@ std::vector<std::deque<bool>> Algorithm::generateChromosome() const
     
     while (!ready)
     {
-        if (tries >= 10'000)
+        if (tries >= 100'000)
         {
             std::cout << "Cannot generate, not enough viable combinations for " << tries << " tries." << std::endl;
             exit(-1);
@@ -247,7 +252,7 @@ Individual Algorithm::generateOffspring(const Individual& parentOne, const Indiv
     while (!ready)
     {
         chromosome.clear();
-        if (iterations > 10'000)
+        if (iterations > 100'000)
         {
             std::cout << "Could not generate offspring in: " << iterations << " iterations.";
             exit(-1);
@@ -263,9 +268,6 @@ Individual Algorithm::generateOffspring(const Individual& parentOne, const Indiv
                 chromosome.push_back(mutate(parentTwo.chromosome.at(i)));
         }
 
-        //ready = true;
-       // std::cout << "Iteration: " << iterations << std::endl;
-       // printIndividual(chromosome);
         ready = checkPermutation(chromosome);
         ++iterations;
     }

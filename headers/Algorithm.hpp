@@ -7,6 +7,7 @@
 #include <random>
 #include <algorithm>
 #include <iostream>
+#include <fstream>
 
 
 struct Subject
@@ -66,7 +67,7 @@ private:
     std::deque<bool> cross(const std::deque<bool>& geneOne, const std::deque<bool>& geneTwo) const;
 
     void printIndividual(const std::vector<std::deque<bool>>& chromosome) const;
-    void printResult(const std::vector<std::deque<bool>>& chromosome) const;
+    void printResult(const Individual& individual) const;
     bool checkConvergence(int currentFitness);
 
     int m_populationSize;

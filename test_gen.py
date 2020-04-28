@@ -17,14 +17,14 @@ class Generator:
         print("max days per sub: " + str(self.maxDaysPerSubject))
         print("min ects per sub: " + str(self.minECTSPerSubject))
         # generate subjectN dependency lists
-        dep = [[] for i in range(self.subjectN)]
+        dep = [[] for i in range(0, self.subjectN + 1)]
         # generate a cost List of N
         sub = []
         for i in range(1, self.subjectN + 1):
             # generate a dependency with some p
             p = random.randint(1, 100)
             if p > 90:
-                where = random.randint(1, self.subjectN)
+                where = random.randint(0, self.subjectN)
                 dep[where].append(i)
             
             ects = random.randint(self.minECTSPerSubject, self.minECTSPerSubject * 2)
