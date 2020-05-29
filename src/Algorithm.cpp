@@ -100,7 +100,7 @@ void Algorithm::printResult(const Individual& individual) const
     for (size_t i = 0; i < individual.chromosome.size(); ++i)
     {
         std::cout << "Semester: " << i << " | ";
-        for (size_t j = 1; j < indivudal.chromosome.at(i).size(); ++j)
+        for (size_t j = 1; j < individual.chromosome.at(i).size(); ++j)
         {
             bool v = individual.chromosome.at(i).at(j);
             if (v)
